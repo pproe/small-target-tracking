@@ -93,7 +93,7 @@ classdef DataLoader
                     for ii=1:11
                         for jj=1:11
                                if (obj.hblob_centroid{a}(b,2)+(ii-6))>=1 && (obj.hblob_centroid{a}(b,2)+(ii-6))<=size(obj.image{a+1},1) && (obj.hblob_centroid{a}(b,1)+(jj-6))>=1 && (obj.hblob_centroid{a}(b,1)+(jj-6))<=size(obj.image{a+1},2)
-                                  % x,y coordination is
+                                  % x,y coordinate is
                                   % actually the opposite for some reason
                                   % get the grayscale values within the window
                    
