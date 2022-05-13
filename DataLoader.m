@@ -37,11 +37,11 @@ classdef DataLoader
             number=obj.frame_range(1,1);
             for i=1:obj.interval
                 im_name=append(sprintf('%06d',number),'.jpg');
-                f2=fullfile('mot',obj.type,obj.scene,'img',im_name);
+                f2=fullfile('VISO', 'mot',obj.type,obj.scene,'img',im_name);
                 obj.image{i}=rgb2gray(imread(f2));
                 number=number+1;
             end
-            f1=fullfile('mot',obj.type,obj.scene,'gt','gt.txt');
+            f1=fullfile('VISO','mot',obj.type,obj.scene,'gt','gt.txt');
             obj.candidate=csvread(f1);
             
             
@@ -72,13 +72,15 @@ classdef DataLoader
             for i=1:(obj.interval-2)
                 obj.and_output{i}=bitand(obj.outlier{i}, obj.outlier{i+1});
             end
-                
+
             % Candidate match discrimination
             
             hblob=vision.BlobAnalysis('MinimumBlobArea',4,'MaximumCount',200);
             obj.hblob_area={};
             obj.hblob_centroid={};
             obj.hblob_bbox={};
+
+            % Get area, centroid and bounding box info from binary image
             for i=1:(obj.interval-2)
                 [area,centroid,bbox] = hblob(obj.and_output{i});
                 obj.hblob_area{i}=area;
@@ -87,33 +89,53 @@ classdef DataLoader
             end
       %      shape=insertShape(car05_7_11.image{2},'rectangle',bbox, 'Linewidth',10);
             
-            for a=1:(obj.interval-2)  % and_output image
-                for b=1:size(obj.hblob_centroid{a},1)  % clusters inside
-                    mask=zeros(11,11);
-                    for ii=1:11
-                        for jj=1:11
-                               if (obj.hblob_centroid{a}(b,2)+(ii-6))>=1 && (obj.hblob_centroid{a}(b,2)+(ii-6))<=size(obj.image{a+1},1) && (obj.hblob_centroid{a}(b,1)+(jj-6))>=1 && (obj.hblob_centroid{a}(b,1)+(jj-6))<=size(obj.image{a+1},2)
+            for a=1:(obj.interval-2) % Repeat for each image
+                for b=1:size(obj.hblob_centroid{a},1)  % Repeat for each blob detected
+                    mask=zeros(11,11); % Create 11x11 array of 0
+                    
+                    % Create separate 11x11 2d array to store pixel
+                    % intensity of pixels surrounding centroid in 11x11
+                    for ii=1:11         % Repeat block for each pixel in 
+                        for jj=1:11     % 11x11 square around centroid
+
+                               if (obj.hblob_centroid{a}(b,2)+(ii-6))>=1 ...                            % If pixel y value is greater than 1
+                                   && (obj.hblob_centroid{a}(b,2)+(ii-6))<=size(obj.image{a+1},1) ...   % And less than the height of image;
+                                   && (obj.hblob_centroid{a}(b,1)+(jj-6))>=1 ...                        % And pixel x value is greater than 1
+                                   && (obj.hblob_centroid{a}(b,1)+(jj-6))<=size(obj.image{a+1},2)       % And less than the width of image;
                                   % x,y coordinate is
                                   % actually the opposite for some reason
                                   % get the grayscale values within the window
                    
-                                        mask(ii,jj)=obj.image{a+1}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6));
+                                        mask(ii,jj)=obj.image{a+1}(obj.hblob_centroid{a}(b,2)+(ii-6), ...
+                                            obj.hblob_centroid{a}(b,1)+(jj-6));     % Add pixel to the mask 
                                end
                         end
                     end
-                    mask_mean=mean(mask,'all');
-                    mask_std= std(mask,1, 'all');
-                    th= norminv([0.005 0.995],mask_mean,mask_std); % need to have a look
-                    th=int8(th);
-                    
+
                     mask_binary=zeros(11,11);
+
+                    % Iterate over pixels in 11x11 block and set binary
+                    % mask values
                     for ii=1:11
                         for jj=1:1
-                             if (obj.hblob_centroid{a}(b,2)+(ii-6))>=1 && (obj.hblob_centroid{a}(b,2)+(ii-6))<=size(obj.image{a+1},1) && (obj.hblob_centroid{a}(b,1)+(jj-6))>=1 && (obj.hblob_centroid{a}(b,1)+(jj-6))<=size(obj.image{a+1},2)
-                                 mask_binary(ii,jj)=obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6));
+                             if (obj.hblob_centroid{a}(b,2) + (ii-6)) >= 1 ...
+                                 && (obj.hblob_centroid{a}(b,2) + (ii-6)) <= size(obj.image{a+1},1) ...
+                                 && (obj.hblob_centroid{a}(b,1) + (jj-6)) >= 1 ... 
+                                 && (obj.hblob_centroid{a}(b,1) + (jj-6)) <= size(obj.image{a+1},2)
+
+                                 mask_binary(ii,jj) = obj.and_output{a}(obj.hblob_centroid{a}(b,2) + (ii-6), obj.hblob_centroid{a}(b,1) + (jj-6));
                              end
                         end
                     end
+                    
+                    % Mask values to only include cluster values when
+                    % calculating mean and std
+                    cluster_locations = find(mask_binary == 1);
+                    
+                    mask_mean = mean(mask(cluster_locations),'all');         % Find mean of pixel values in 11x11 block
+                    mask_std = std(mask(cluster_locations), 1, 'all');       % Find STD of pixel values in 11x11 block
+                    th= norminv([0.005 0.995],mask_mean,mask_std); % need to have a look
+                    th=int8(th);
                     
                     % grow the region of object clusters in and_put images
                     % I have tested with examples, it seems the growing
@@ -121,14 +143,26 @@ classdef DataLoader
                     % in my understanding the th region should be around [200 256]
                     for ii=1:11
                         for jj=1:11
-                            if (obj.hblob_centroid{a}(b,2)+(ii-6))>=1 && (obj.hblob_centroid{a}(b,2)+(ii-6))<=size(obj.image{a+1},1) && (obj.hblob_centroid{a}(b,1)+(jj-6))>=1 && (obj.hblob_centroid{a}(b,1)+(jj-6))<=size(obj.image{a+1},2)
-                                if mask(ii,jj)>= th(1,1) && mask(ii,jj)<=th(1,2) && mask_binary(ii,jj)~=1
-                                    obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6))= 1;
+                            if (obj.hblob_centroid{a}(b,2)+(ii-6))>=1 ...
+                                && (obj.hblob_centroid{a}(b,2) + (ii-6)) <= size(obj.image{a+1},1) ...
+                                && (obj.hblob_centroid{a}(b,1) + (jj-6)) >= 1 ...
+                                && (obj.hblob_centroid{a}(b,1) + (jj-6)) <= size(obj.image{a+1},2)
+                                
+                                % If pixel is within confidence interval
+                                % and not included in detection mask
+                                if mask(ii,jj) >= th(1,1) ...
+                                    && mask(ii,jj) <= th(1,2) ...
+                                    && mask_binary(ii,jj) ~= 1 ...
+                                    
+                                    % Set mask value to 1
+                                    obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6)) = 1;
+
+                                % Is this line not redundant? Pixel should
+                                % already be 1.
                                 elseif mask_binary(ii,jj)==1
-                                    obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6))= 1;
+                                    obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6)) = 1;
                                 end
                             end
-                              
                         end
                     end
                 end 
