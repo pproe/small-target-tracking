@@ -87,7 +87,7 @@ classdef DataLoader
                 obj.hblob_centroid{i}=int16(centroid);
                 obj.hblob_bbox{i}=bbox;
             end
-      %      shape=insertShape(car05_7_11.image{2},'rectangle',bbox, 'Linewidth',10);
+            % shape=insertShape(car05_7_11.image{2},'rectangle',bbox, 'Linewidth',10);
             
             for a=1:(obj.interval-2) % Repeat for each image
                 for b=1:size(obj.hblob_centroid{a},1)  % Repeat for each blob detected
@@ -132,10 +132,16 @@ classdef DataLoader
                     % calculating mean and std
                     cluster_locations = find(mask_binary == 1);
                     
-                    mask_mean = mean(mask(cluster_locations),'all');         % Find mean of pixel values in 11x11 block
-                    mask_std = std(mask(cluster_locations), 1, 'all');       % Find STD of pixel values in 11x11 block
-                    th= norminv([0.005 0.995],mask_mean,mask_std); % need to have a look
-                    th=int8(th);
+                    mask_mean = mean(mask,'all');         % Find mean of pixel values in 11x11 block
+                    mask_std = std(mask, 1, 'all');       % Find STD of pixel values in 11x11 block
+                    
+
+                    
+                    
+
+                    th= norminv([0.005 0.995],mask_mean,mask_std);           % need to have a look
+                    th=int16(th);
+                    
                     
                     % grow the region of object clusters in and_put images
                     % I have tested with examples, it seems the growing
@@ -155,12 +161,12 @@ classdef DataLoader
                                     && mask_binary(ii,jj) ~= 1 ...
                                     
                                     % Set mask value to 1
-                                    obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6)) = 1;
+                                    %obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6)) = 1;
 
                                 % Is this line not redundant? Pixel should
                                 % already be 1.
                                 elseif mask_binary(ii,jj)==1
-                                    obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6)) = 1;
+                                    %obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6)) = 1;
                                 end
                             end
                         end
