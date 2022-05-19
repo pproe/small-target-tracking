@@ -4,7 +4,7 @@ classdef DataLoader
     properties 
     type          % 'car', 'plane'.. input as strings
     scene         % 001, 002...
-    candidate     % gt file info
+    gt_regions     % gt regions ([x y w h] shape)
     image         % image data
     frame_range   % format [2, 5]
     interval
@@ -22,6 +22,8 @@ classdef DataLoader
     hblob_area
     hblob_centroid
     hblob_bbox
+
+    output_regions % each line has shape [x y w h]
     end
     
     methods
@@ -43,7 +45,32 @@ classdef DataLoader
                 number=number+1;
             end
             f1=fullfile('VISO','mot',obj.type,obj.scene,'gt','gt.txt');
-            obj.candidate=csvread(f1);
+            candidate_data = readmatrix(f1);
+
+            obj.gt_regions = {};
+
+            % Setup Iterators for loop
+            lastframe = 1;
+            frame_regions = [];
+            i=1;
+
+            while i <= size(candidate_data, 1)
+
+                frame = candidate_data(i, 1);
+                region = candidate_data(i, 3:6);
+                i = i + 1;
+
+                if(frame == lastframe)
+                    frame_regions = [frame_regions; region];
+                else
+                    obj.gt_regions{lastframe} = frame_regions;
+                    frame_regions = region;
+                    lastframe = frame;
+                end        
+            end
+            
+            % Add final region 
+            obj.gt_regions{lastframe} = frame_regions;
             
             
             % Candidate small objects detection
@@ -136,12 +163,15 @@ classdef DataLoader
                     % Mask values to only include cluster values when
                     % calculating mean and std
                     cluster_locations = mask_binary == 1;
-                    
-                    mask_mean = mean(mask(cluster_locations),'all');         % Find mean of pixel values in 11x11 block
-                    mask_std = std(mask(cluster_locations), 1, 'all');       % Find STD of pixel values in 11x11 block
 
-                    th= norminv([0.005 0.995],mask_mean,mask_std);           % need to have a look
-                    th=uint8(th);
+                    masked_vals = mask(cluster_locations);
+                    
+                    mask_mean = mean(masked_vals,'all');       % Find mean of pixel values in 11x11 block
+                    mask_std = std(masked_vals, 1, 'all');       % Find STD of pixel values in 11x11 block
+                    mask_population_std = mask_std/sqrt(size(masked_vals, 1)); % Get standard deviation of total population
+
+                    th = norminv([0.005 0.995],mask_mean,mask_population_std);           % need to have a look
+                    th = uint8(th);
                     
                     %if(~isnan(cluster_locations) && a == 7)
                         % mask(cluster_locations)
@@ -181,41 +211,47 @@ classdef DataLoader
             mc_hblob=vision.BlobAnalysis('MinimumBlobArea',4,'MaximumCount',200, ...
                 'MajorAxisLengthOutputPort', true, 'EccentricityOutputPort', true, ...
                 'ExtentOutputPort', true);
-            mc_hblob_area = {};
-            mc_hblob_centroid = {};
-            mc_hblob_bbox = {};
-            mc_hblob_majoraxis = {};
-            mc_hblob_eccentricity = {};
-            mc_hblob_extent = {};
+
+            obj.output_regions = {};
+
+            extent_th = [0, 0.7];
+            eccentricity_th = [0.5, 1];
+            majoraxis_th = [0, 20];
+            area_th = [10, 70];
 
             % Get area, centroid and bounding box info from binary image
-            for i=1:(obj.interval-2)
+            for i = 1:(obj.interval-2)
                 [area,centroid,bbox, majoraxis, eccentricity, EXTENT] = mc_hblob(obj.and_output{i});
-                mc_hblob_area{i} = area;
-                mc_hblob_centroid{i} = int16(centroid);
-                mc_hblob_bbox{i} = bbox;
-                mc_hblob_majoraxis{i} = majoraxis;
-                mc_hblob_eccentricity{i} = eccentricity;
-                mc_hblob_extent{i} = EXTENT;
+
+                regions = [];
+                
+                % If cues are within thresholds, add to output regions
+                for j = 1:size(centroid, 1)
+                    if area(j) >= area_th(1) && area(j) <= area_th(2) ...
+                        && EXTENT(j) >= extent_th(1) && EXTENT(j) <= extent_th(2) ...
+                        && majoraxis(j) >= majoraxis_th(1) && majoraxis(j) <= majoraxis_th(2) ...
+                        && eccentricity(j) >= eccentricity_th(1) && eccentricity(j) <= eccentricity_th(2)
+                        
+                        regions = [regions; bbox(j, :)];
+                    end
+                end
+                obj.output_regions{i} = regions;
             end
 
             % Plot values for blobs in interval 5
 
-            figure('Name', 'Extent');
-            ex_hist = histogram(mc_hblob_extent{5})
-            title('Extent')
-            figure('Name', 'Eccentricity');
-            ec_hist = histogram(mc_hblob_eccentricity{5})
-            title('Eccentricity')
-            figure('Name', 'Major Axis Length')
-            maj_hist = histogram(mc_hblob_majoraxis{5})
-            title('Major Axis Length')
-            figure('Name', 'Area');
-            area_hist = histogram(mc_hblob_area{5})
-            title('Area')
-
-
-
+%             figure('Name', 'Extent');
+%             ex_hist = histogram(mc_hblob_extent{5})
+%             title('Extent')
+%             figure('Name', 'Eccentricity');
+%             ec_hist = histogram(mc_hblob_eccentricity{5})
+%             title('Eccentricity')
+%             figure('Name', 'Major Axis Length')
+%             maj_hist = histogram(mc_hblob_majoraxis{5})
+%             title('Major Axis Length')
+%             figure('Name', 'Area');
+%             area_hist = histogram(mc_hblob_area{5})
+%             title('Area')
         end     
     end
 end
