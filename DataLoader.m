@@ -15,6 +15,7 @@ classdef DataLoader
     th
     outlier 
     and_output
+    before_growing
     
     % Candidate match discrimination
     
@@ -73,7 +74,11 @@ classdef DataLoader
                 obj.and_output{i}=bitand(obj.outlier{i}, obj.outlier{i+1});
             end
 
-            % Candidate match discrimination
+            obj.before_growing = obj.and_output;
+
+            %% Candidate match discrimination
+
+            %% Region Growing
             
             hblob=vision.BlobAnalysis('MinimumBlobArea',4,'MaximumCount',200);
             obj.hblob_area={};
@@ -106,7 +111,7 @@ classdef DataLoader
                                   % actually the opposite for some reason
                                   % get the grayscale values within the window
                    
-                                        mask(ii,jj)=obj.image{a+1}(obj.hblob_centroid{a}(b,2)+(ii-6), ...
+                                        mask(ii,jj)=obj.image{a+2}(obj.hblob_centroid{a}(b,2)+(ii-6), ...
                                             obj.hblob_centroid{a}(b,1)+(jj-6));     % Add pixel to the mask 
                                end
                         end
@@ -117,7 +122,7 @@ classdef DataLoader
                     % Iterate over pixels in 11x11 block and set binary
                     % mask values
                     for ii=1:11
-                        for jj=1:1
+                        for jj=1:11
                              if (obj.hblob_centroid{a}(b,2) + (ii-6)) >= 1 ...
                                  && (obj.hblob_centroid{a}(b,2) + (ii-6)) <= size(obj.image{a+1},1) ...
                                  && (obj.hblob_centroid{a}(b,1) + (jj-6)) >= 1 ... 
@@ -130,18 +135,20 @@ classdef DataLoader
                     
                     % Mask values to only include cluster values when
                     % calculating mean and std
-                    cluster_locations = find(mask_binary == 1);
+                    cluster_locations = mask_binary == 1;
                     
-                    mask_mean = mean(mask,'all');         % Find mean of pixel values in 11x11 block
-                    mask_std = std(mask, 1, 'all');       % Find STD of pixel values in 11x11 block
-                    
-
-                    
-                    
+                    mask_mean = mean(mask(cluster_locations),'all');         % Find mean of pixel values in 11x11 block
+                    mask_std = std(mask(cluster_locations), 1, 'all');       % Find STD of pixel values in 11x11 block
 
                     th= norminv([0.005 0.995],mask_mean,mask_std);           % need to have a look
-                    th=int16(th);
+                    th=uint8(th);
                     
+                    %if(~isnan(cluster_locations) && a == 7)
+                        % mask(cluster_locations)
+                       % mask_mean, mask_std
+                        % cluster_locations
+                       % th
+                    %end
                     
                     % grow the region of object clusters in and_put images
                     % I have tested with examples, it seems the growing
@@ -156,23 +163,59 @@ classdef DataLoader
                                 
                                 % If pixel is within confidence interval
                                 % and not included in detection mask
-                                if mask(ii,jj) >= th(1,1) ...
-                                    && mask(ii,jj) <= th(1,2) ...
-                                    && mask_binary(ii,jj) ~= 1 ...
+                                if mask(ii,jj) > th(1,1) ...
+                                    && mask(ii,jj) < th(1,2)
                                     
                                     % Set mask value to 1
-                                    %obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6)) = 1;
-
-                                % Is this line not redundant? Pixel should
-                                % already be 1.
-                                elseif mask_binary(ii,jj)==1
-                                    %obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6)) = 1;
+                                    obj.and_output{a}(obj.hblob_centroid{a}(b,2)+(ii-6), obj.hblob_centroid{a}(b,1)+(jj-6)) = 1;
                                 end
                             end
                         end
                     end
                 end 
             end
+
+            %% Morphological Cues
+            % Recalculate Blobs after region growing step
+
+            mc_hblob=vision.BlobAnalysis('MinimumBlobArea',4,'MaximumCount',200, ...
+                'MajorAxisLengthOutputPort', true, 'EccentricityOutputPort', true, ...
+                'ExtentOutputPort', true);
+            mc_hblob_area = {};
+            mc_hblob_centroid = {};
+            mc_hblob_bbox = {};
+            mc_hblob_majoraxis = {};
+            mc_hblob_eccentricity = {};
+            mc_hblob_extent = {};
+
+            % Get area, centroid and bounding box info from binary image
+            for i=1:(obj.interval-2)
+                [area,centroid,bbox, majoraxis, eccentricity, EXTENT] = mc_hblob(obj.and_output{i});
+                mc_hblob_area{i} = area;
+                mc_hblob_centroid{i} = int16(centroid);
+                mc_hblob_bbox{i} = bbox;
+                mc_hblob_majoraxis{i} = majoraxis;
+                mc_hblob_eccentricity{i} = eccentricity;
+                mc_hblob_extent{i} = EXTENT;
+            end
+
+            % Plot values for blobs in interval 5
+
+            figure('Name', 'Extent');
+            ex_hist = histogram(mc_hblob_extent{5})
+            title('Extent')
+            figure('Name', 'Eccentricity');
+            ec_hist = histogram(mc_hblob_eccentricity{5})
+            title('Eccentricity')
+            figure('Name', 'Major Axis Length')
+            maj_hist = histogram(mc_hblob_majoraxis{5})
+            title('Major Axis Length')
+            figure('Name', 'Area');
+            area_hist = histogram(mc_hblob_area{5})
+            title('Area')
+
+
+
         end     
     end
 end
