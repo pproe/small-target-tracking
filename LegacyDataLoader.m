@@ -25,6 +25,12 @@ classdef LegacyDataLoader
 
     output_regions % each line has shape [x y w h]
     track_states %holds an array of tracker objects per image
+    
+     % Evaluation
+    precision
+    recall
+    f1
+    
     end
     
     methods
@@ -248,7 +254,33 @@ classdef LegacyDataLoader
                 end
                 obj.track_states(i) = trackingAlgorithm(obj.output_regions{i},trackerArray);
             end
-
+            
+            
+            % Evaluation 
+            obj.precision=[];
+            obj.recall=[];
+            obj.f1=[];
+       
+            for i = 1: (obj.interval-2)
+                tp=0;
+                fp=0;
+                fn=0;
+            
+                for j=1:size(obj.gt_regions{obj.frame_range(1,1)+i},1)
+                    for u= 1: size(obj.output_regions{i},1)
+                        overlapRatio = bboxOverlapRatio(obj.gt_regions{obj.frame_range(1,1)+i+1}(j,:),obj.output_regions{i}(u,:),'Union')
+                        if overlapRatio>=0.7
+                            tp=tp+1
+                        end 
+                    end 
+                end 
+                fp= size(obj.output_regions{i},1)-tp;
+                fn=size(obj.gt_regions{obj.frame_range(1,1)+i},1)-tp;
+                obj.precision(i)=  tp/(tp+fp);
+                obj.recall(i)=tp/(tp+fn);
+                obj.f1(i)=2*obj.precision(i)*obj.recall(i)/(obj.precision(i)+obj.recall(i));
+            end 
+                
 
 
 
