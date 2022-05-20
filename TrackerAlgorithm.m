@@ -1,21 +1,16 @@
 
-%some crappy test data just to test process.
-testCentroids = [1,1;2,2;3,3;4,4;5,5];
-testCentroids(:,:,2) = [1.1,1.1;2.1,2.1;3.1,3.1;4.1,4.1;5.1,5.1];
-testCentroids(:,:,3) = [11,11;12,12;13,13;14,14;15,15];
-%  
+function ta = trackingAlgorithm(centroids, trackerArray)
 
+    detections = GetDetectionCoords(centroids);
+    processedTracks = trackingAlgorithmSub(detections,trackerArray);
+    trackerArray = processedTracks;
+    ta = trackerArray;
 
-TrackerArray= []; %main tracking array.  
-
-for i = 1: size(testCentroids,3)  %cycle through each frame of centroid coords
-    processedTracks = trackingAlgorithmSub(testCentroids(:,:,i),TrackerArray);
-    TrackerArray = processedTracks;
-end 
+end
 
 
 function tas = trackingAlgorithmSub(detections,tracks)
-
+    
     [assignments,unassignedTracks, unassignedDetections] = MatchDetectionsAndTracks(detections,tracks);
     %match tracks to detections and return matches or unassigned tracks /
     %detections
@@ -90,7 +85,7 @@ end
 
 function [a,ut,ud] = MatchDetectionsAndTracks(detections,tracks)
     
-    detectionsCoords = GetDetectionCoords(detections);
+    %detectionsCoords = GetDetectionCoords(detections);
     if size(tracks,1) ==0 
          a = [];
          ut = [];
@@ -115,7 +110,12 @@ end
 
 function gdc = GetDetectionCoords(detections)
     %if centroids are in different format, have the extraction process here
-    gdc= detections;
+    detectionCoords = [];
+    for i = 1: length(detections)
+        newval = [detections(i,1), detections(i,2)];
+        detectionCoords = [detectionCoords; newval];
+    end
+    gdc= detectionCoords;
 end 
 
 
