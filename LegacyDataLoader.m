@@ -257,25 +257,25 @@ classdef LegacyDataLoader
             
             
             % Evaluation 
-            obj.precision=[];
+            obj.precision=[];  % precision of each output frame
             obj.recall=[];
             obj.f1=[];
        
-            for i = 1: (obj.interval-2)
+            for i = 1: (obj.interval-2)  % for each output_regions frame
                 tp=0;
                 fp=0;
                 fn=0;
             
-                for j=1:size(obj.gt_regions{obj.frame_range(1,1)+i},1)
-                    for u= 1: size(obj.output_regions{i},1)
+                for j=1:size(obj.gt_regions{obj.frame_range(1,1)+i},1)  % for each bbox of the ground truth in one frame
+                    for u= 1: size(obj.output_regions{i},1)  % for each bbox in one output_region
                         overlapRatio = bboxOverlapRatio(obj.gt_regions{obj.frame_range(1,1)+i+1}(j,:),obj.output_regions{i}(u,:),'Union')
                         if overlapRatio>=0.7
-                            tp=tp+1
+                            tp=tp+1 % when the bbox of ground truth has a match 
                         end 
                     end 
                 end 
-                fp= size(obj.output_regions{i},1)-tp;
-                fn=size(obj.gt_regions{obj.frame_range(1,1)+i},1)-tp;
+                fp= size(obj.output_regions{i},1)-tp;  % false positive
+                fn=size(obj.gt_regions{obj.frame_range(1,1)+i},1)-tp; %false negative
                 obj.precision(i)=  tp/(tp+fp);
                 obj.recall(i)=tp/(tp+fn);
                 obj.f1(i)=2*obj.precision(i)*obj.recall(i)/(obj.precision(i)+obj.recall(i));
