@@ -1,4 +1,4 @@
-# CITS4402-Project-SmallTargetTracking
+# SmallTargetTracking
 
 This project uses a Matlab implementation to analyse sequences of satellite images to track moving vehicles.
 
